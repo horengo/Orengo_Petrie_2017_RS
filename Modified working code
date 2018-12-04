@@ -41,7 +41,7 @@
 //    can then delete the variable called ‘geometry’ in the code lines 52-65 and the analysis will
 //    be performed in the newly defined area. Make sure the central coordinates defined by
 //    'Map.setCenter' (lines 67-69) are also changed so the map window will zoom to these
-//    coordinates when executing the scripts. 
+//    coordinates when executing the scripts.
 // 3. The execution of the algorithms can take some time (particularly the PCAs). To shorten their
 //    visualisation, select only those you require in the layers panel of the Map window.
 // 4. The images resulting from these scripts can be transferred to your Google Drive running the
