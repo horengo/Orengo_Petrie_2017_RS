@@ -12,12 +12,12 @@
 //                ------------- ooo -------------
 
 // The different algorithms are written here following the order adopted in the journal article:
-// 1. NDVSI (Normalised Difference Vegetation Seasonality Index), line 99
-// 2. SMTVI (Seasonal Multi-Temporal Vegetation Indices),         line 149
-// 3. Wet Months Multi-Temporal Tasselled Cap Transformation,     line 197
-// 4. Dry Months Multi-Temporal Tasselled Cap Transformation,     line 256
-// 5. Wet Months Multi-Temporal Principal Component Analysis,     line 307
-// 6. Dry Months Multi-Temporal Principal Component Analysis,     line 412
+// 1. NDVSI (Normalised Difference Vegetation Seasonality Index), line 100
+// 2. SMTVI (Seasonal Multi-Temporal Vegetation Indices),         line 150
+// 3. Wet Months Multi-Temporal Tasselled Cap Transformation,     line 198
+// 4. Dry Months Multi-Temporal Tasselled Cap Transformation,     line 257
+// 5. Wet Months Multi-Temporal Principal Component Analysis,     line 308
+// 6. Dry Months Multi-Temporal Principal Component Analysis,     line 413
 
 // For more information on how these scripts work and how to apply them refer to the text of the 
 // article, which is freely available at: http://www.mdpi.com/2072-4292/9/7/735
@@ -41,7 +41,7 @@
 //    can then delete the variable called ‘geometry’ in the code lines 52-65 and the analysis will
 //    be performed in the newly defined area. Make sure the central coordinates defined by
 //    'Map.setCenter' (lines 67-69) are also changed so the map window will zoom to these
-//    coordinates when executing the scripts.
+//    coordinates when executing the scripts. 
 // 3. The execution of the algorithms can take some time (particularly the PCAs). To shorten their
 //    visualisation, select only those you require in the layers panel of the Map window.
 // 4. The images resulting from these scripts can be transferred to your Google Drive running the
@@ -63,19 +63,20 @@
 // Set all the available Landsat 5 atmospherically corrected surface reflectance reflectance images as a variable
 var L5_cloud = ee.ImageCollection('LANDSAT/LT05/C01/T1_SR');
 
-// Bits 10 and 11 are clouds and cirrus, respectively in band QA60
-var cloudBitMask = ee.Number(2).pow(3).int();
-var cirrusBitMask = ee.Number(2).pow(5).int();
+// Function to mask clouds using pixel_qa band
+var cloudMaskL457 = function(image) {
+  var qa = image.select('pixel_qa');
+  // If the cloud bit (5) is set and the cloud confidence (7) is high
+  // or the cloud shadow bit is set (3), then it's a bad pixel.
+  var cloud = qa.bitwiseAnd(1 << 5)
+                  .and(qa.bitwiseAnd(1 << 7))
+                  .or(qa.bitwiseAnd(1 << 3));
+  // Remove edge pixels that don't occur in all bands
+  var mask2 = image.mask().reduce(ee.Reducer.min());
+  return image.updateMask(cloud.not()).updateMask(mask2);
+};
 
-function maskS2clouds(image) {
-  var qa = image.select('pixel_qa'); //pixel_qa is the cloud mask band
-  // Both flags should be set to zero, indicating clear conditions.
-  var mask = qa.bitwiseAnd(cloudBitMask).eq(0).and(
-             qa.bitwiseAnd(cirrusBitMask).eq(0));
-  return image.updateMask(mask);
-}
-
-var L5 = L5_cloud.map(maskS2clouds);
+var L5 = L5_cloud.map(cloudMaskL457);
 
 // Define your AOI as a polygon with a set of WGS84 coordinates
 var geometry = ee.Geometry.Polygon(
