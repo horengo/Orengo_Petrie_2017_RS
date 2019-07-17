@@ -25,7 +25,7 @@
 
 // NOTES, READ CAREFULLY!
 // 1. This is a modified version of the original script. GEE made some changes to the Landsat 5
-//    dataset that rendered previous code unusable. The changes can be summarised in:
+//    collection that rendered previous code unusable. The changes can be summarised in:
 //          a.  Use of the atmospherically corrected surface reflectance instead of TOA.
 //          b.  Inclussion of a bit cloud mask instead of the Fmask algortihm used in the previous
 //              TOA dataset.
