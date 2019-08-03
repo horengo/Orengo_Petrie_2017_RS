@@ -37,8 +37,8 @@
 //    However, if the geometry variable is eliminated it will need to be also deleted from the
 //    scripts incorporating it (for example when it is employed to clip the analysis area).
 //    The user can also draw his/her own polygon using the tool provided in the top left of Google
-//    Earth Engine’s map window. This will create a polygon named ‘geometry’ by default. The user
-//    can then delete the variable called ‘geometry’ in the code lines 52-65 and the analysis will
+//    Earth Engine's map window. This will create a polygon named 'geometry' by default. The user
+//    can then delete the variable called 'geometry' in the code lines 52-65 and the analysis will
 //    be performed in the newly defined area. Make sure the central coordinates defined by
 //    'Map.setCenter' (lines 67-69) are also changed so the map window will zoom to these
 //    coordinates when executing the scripts. 
