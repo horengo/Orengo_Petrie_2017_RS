@@ -60,7 +60,7 @@
 // and filtering the clouds, (2) the Area of Interest (AOI) and (3) the central coordinate for visualisation
 // will be defined for the use of the different algorithms
 
-// Set all the available Landsat 5 atmospherically corrected surface reflectance reflectance images as a variable
+// Set all the available Landsat 5 atmospherically corrected surface reflectance images as a variable
 var L5_cloud = ee.ImageCollection('LANDSAT/LT05/C01/T1_SR');
 
 // Function to mask clouds using pixel_qa band
