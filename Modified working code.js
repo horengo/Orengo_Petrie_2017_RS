@@ -12,12 +12,12 @@
 //                ------------- ooo -------------
 
 // The different algorithms are written here following the order adopted in the journal article:
-// 1. NDVSI (Normalised Difference Vegetation Seasonality Index), line 100
-// 2. SMTVI (Seasonal Multi-Temporal Vegetation Indices),         line 150
-// 3. Wet Months Multi-Temporal Tasselled Cap Transformation,     line 198
-// 4. Dry Months Multi-Temporal Tasselled Cap Transformation,     line 257
-// 5. Wet Months Multi-Temporal Principal Component Analysis,     line 308
-// 6. Dry Months Multi-Temporal Principal Component Analysis,     line 413
+// 1. NDVSI (Normalised Difference Vegetation Seasonality Index), line 102
+// 2. SMTVI (Seasonal Multi-Temporal Vegetation Indices),         line 152
+// 3. Wet Months Multi-Temporal Tasselled Cap Transformation,     line 236
+// 4. Dry Months Multi-Temporal Tasselled Cap Transformation,     line 295
+// 5. Wet Months Multi-Temporal Principal Component Analysis,     line 346
+// 6. Dry Months Multi-Temporal Principal Component Analysis,     line 457
 
 // For more information on how these scripts work and how to apply them refer to the text of the 
 // article, which is freely available at: http://www.mdpi.com/2072-4292/9/7/735
@@ -29,18 +29,17 @@
 //          a.  Use of the atmospherically corrected surface reflectance instead of TOA.
 //          b.  Inclussion of a bit cloud mask instead of the Fmask algortihm used in the previous
 //              TOA dataset.
+//    This update uses Landsat Collection 2. SMTVI retains the original TOA basis.
 // 1. Visualisation parameters for each layer can be adjusted in the Layers dialogue in the map
 //    area of Goggle Earth Engine. This might be convenient when visualising at different scales.
 // 2. To apply these analyses in other areas simply change the 'geometry' variable and the
-//    'Map.setCenter' coordinates. These two parameters can be deleted. Doing so will apply the
-//    algorithms in whatever area is being displayed in the Google Earth Engine's Map area.
-//    However, if the geometry variable is eliminated it will need to be also deleted from the
-//    scripts incorporating it (for example when it is employed to clip the analysis area).
+//    'Map.setCenter' coordinates. To analyse the current map extent, use
+//    var geometry = ee.Geometry.Rectangle(Map.getBounds()); in place of the polygon below.
 //    The user can also draw his/her own polygon using the tool provided in the top left of Google
 //    Earth Engine's map window. This will create a polygon named 'geometry' by default. The user
-//    can then delete the variable called 'geometry' in the code lines 52-65 and the analysis will
+//    can then delete the variable called 'geometry' in lines 63-71 and the analysis will
 //    be performed in the newly defined area. Make sure the central coordinates defined by
-//    'Map.setCenter' (lines 67-69) are also changed so the map window will zoom to these
+//    'Map.setCenter' (line 75) are also changed so the map window will zoom to these
 //    coordinates when executing the scripts. 
 // 3. The execution of the algorithms can take some time (particularly the PCAs). To shorten their
 //    visualisation, select only those you require in the layers panel of the Map window.
@@ -60,24 +59,6 @@
 // and filtering the clouds, (2) the Area of Interest (AOI) and (3) the central coordinate for visualisation
 // will be defined for the use of the different algorithms
 
-// Set all the available Landsat 5 atmospherically corrected surface reflectance images as a variable
-var L5_cloud = ee.ImageCollection('LANDSAT/LT05/C01/T1_SR');
-
-// Function to mask clouds using pixel_qa band
-var cloudMaskL457 = function(image) {
-  var qa = image.select('pixel_qa');
-  // If the cloud bit (5) is set and the cloud confidence (7) is high
-  // or the cloud shadow bit is set (3), then it's a bad pixel.
-  var cloud = qa.bitwiseAnd(1 << 5)
-                  .and(qa.bitwiseAnd(1 << 7))
-                  .or(qa.bitwiseAnd(1 << 3));
-  // Remove edge pixels that don't occur in all bands
-  var mask2 = image.mask().reduce(ee.Reducer.min());
-  return image.updateMask(cloud.not()).updateMask(mask2);
-};
-
-var L5 = L5_cloud.map(cloudMaskL457);
-
 // Define your AOI as a polygon with a set of WGS84 coordinates
 var geometry = ee.Geometry.Polygon(
     [[[77.59,28.8],
@@ -93,13 +74,34 @@ var geometry = ee.Geometry.Polygon(
 // just for visualisation purposes
 Map.setCenter(75.564, 29.874, 8);
 
+// Set all the available Landsat 5 atmospherically corrected surface reflectance images as a variable
+var L5_cloud = ee.ImageCollection('LANDSAT/LT05/C02/T1_L2').filterBounds(geometry);
+
+// Collection 2 QA_PIXEL flags for fill (0), high-confidence cloud (3) and cloud shadow (4).
+function clearL5Pixels(image) {
+  return image.select('QA_PIXEL').bitwiseAnd((1 << 0) | (1 << 3) | (1 << 4)).eq(0);
+}
+
+var cloudMaskL457 = function(image) {
+  var optical = image.select(['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B7'],
+                             ['B1', 'B2', 'B3', 'B4', 'B5', 'B7']);
+  // Remove edge pixels that don't occur in all bands
+  var mask2 = optical.mask().reduce(ee.Reducer.min());
+  // Convert to surface reflectance, then retain the original reflectance x 10000 units for TCT.
+  return optical.multiply(0.0000275).subtract(0.2).multiply(10000).toFloat()
+      .updateMask(clearL5Pixels(image)).updateMask(mask2)
+      .set('system:time_start', image.get('system:time_start'));
+};
+
+var L5 = L5_cloud.map(cloudMaskL457);
+
 
 //                ------------- ooo -------------
 
 
 // NDVSI (Normalised Difference Vegetation Seasonality Index)
 
-// Load a Landsat 5 collection (1984-2013) and select the bands of interest: B3 (red) and B4 (NIR)
+// Load a Landsat 5 collection (1984-2012) and select the bands of interest: B3 (red) and B4 (NIR)
 var L5_NDVSI = L5.select(['B3', 'B4']);
 
 // Select the L5 images corresponding to the wet months and average their values
@@ -149,8 +151,44 @@ Export.image.toDrive({
 
 // SMTVI (Seasonal Multi-Temporal Vegetation Indices)
 
-// Import the image collection with all Landsat 5 8-days EVI composites  
-var eviL5 = ee.ImageCollection('LANDSAT/LT5_L1T_8DAY_EVI');
+// Rebuild the Landsat 5 eight-day EVI composites from Tier 1 daytime scenes over the AOI.
+var L5_raw = ee.ImageCollection('LANDSAT/LT05/C02/T1')
+    .filterBounds(geometry).filter(ee.Filter.gt('SUN_ELEVATION', 0));
+
+print('Landsat 5 scenes intersecting the AOI (before pixel masking)', ee.Dictionary({
+  surface_reflectance: L5_cloud.size(), daytime_level_1_for_EVI: L5_raw.size()
+}));
+
+function sceneEVI(image) {
+  var toa = ee.Algorithms.Landsat.TOA(image);
+  var nir = toa.select('B4');
+  var red = toa.select('B3');
+  var blue = toa.select('B1');
+  var denominator = nir.add(red.multiply(6)).subtract(blue.multiply(7.5)).add(1);
+  var evi = nir.subtract(red).multiply(2.5).divide(denominator).rename('EVI');
+  return evi.updateMask(clearL5Pixels(image)).updateMask(denominator.neq(0))
+      .updateMask(evi.gte(-1).and(evi.lte(1))).toFloat()
+      .set('system:time_start', image.get('system:time_start'));
+}
+
+// Start a new eight-day sequence on 1 January each year, including the overlapping final window.
+var windowStarts = ee.List.sequence(1984, 2012).map(function(year) {
+  var january1 = ee.Date.fromYMD(year, 1, 1);
+  return ee.List.sequence(0, 360, 8).map(function(offset) {
+    return january1.advance(offset, 'day').millis();
+  });
+}).flatten();
+
+// A fully masked EVI band gives empty windows zero weight in the two-month means.
+var emptyEVI = ee.Image.constant(0).rename('EVI').toFloat().selfMask()
+    .set('system:time_start', 0);
+var eviL5 = ee.ImageCollection.fromImages(windowStarts.map(function(millis) {
+  var start = ee.Date(ee.Number(millis));
+  var scenes = L5_raw.filterDate(start, start.advance(8, 'day')).map(sceneEVI);
+  // The most recent valid observation at each pixel has priority in the original composites.
+  return ee.ImageCollection([emptyEVI]).merge(scenes).sort('system:time_start').mosaic()
+      .set('system:time_start', start.millis());
+}));
 
 // Filter them by two-moths periods and extract the average values 
 var eviL5_JanFeb = eviL5.filter(ee.Filter.dayOfYear(1,60))
@@ -207,7 +245,7 @@ var coefficients = ee.Array([
   [0.1084, -0.9022, 0.4120, 0.0573, -0.0251, 0.0238]
 ]);
 
-// Load a Landsat 5 collection (1984-2013) and select the bands of interest
+// Load a Landsat 5 collection (1984-2012) and select the bands of interest
 var L5_bands = L5.select(['B1', 'B2', 'B3', 'B4', 'B5', 'B7']);
 
 // Select the L5 images corresponding to the wet months, average their values and clip to AOI 
@@ -314,7 +352,9 @@ Export.image.toDrive({
 
 
 // Get some information about the input to be used later.
-var scale = L5_bands_Wet.projection().nominalScale();
+// Use a Landsat 30 m grid for both PCAs. A multi-scene mean can have a one-degree default grid.
+var scale = 30;
+var pcaProjection = ee.Image(L5.first()).select('B1').projection();
 var bandNames = L5_bands_Wet.bandNames();
 
 // Mean center the data to enable a faster covariance reducer
@@ -322,7 +362,9 @@ var bandNames = L5_bands_Wet.bandNames();
 var meanDict = L5_bands_Wet.reduceRegion({
     reducer: ee.Reducer.mean(),
     geometry: geometry,
+    crs: pcaProjection,
     scale: scale,
+    tileScale: 4,
     maxPixels: 1e9
 });
 var means = ee.Image.constant(meanDict.values(bandNames));
@@ -332,7 +374,7 @@ var centered = L5_bands_Wet.subtract(means);
 var getNewBandNames = function(prefix) {
   var seq = ee.List.sequence(1, bandNames.length());
   return seq.map(function(b) {
-    return ee.String(prefix).cat(ee.Number(b).int());
+    return ee.String(prefix).cat(ee.Number(b).format('%d'));
   });
 };
 
@@ -347,7 +389,9 @@ var getPrincipalComponents = function(centered, scale, geometry) {
   var covar = arrays.reduceRegion({
     reducer: ee.Reducer.centeredCovariance(),
     geometry: geometry,
+    crs: pcaProjection,
     scale: scale,
+    tileScale: 4,
     maxPixels: 1e9
   });
 
@@ -424,7 +468,9 @@ Export.image.toDrive({
 var meanDict_Dry = L5_bands_Dry.reduceRegion({
     reducer: ee.Reducer.mean(),
     geometry: geometry,
+    crs: pcaProjection,
     scale: scale,
+    tileScale: 4,
     maxPixels: 1e9
 });
 var means_Dry = ee.Image.constant(meanDict_Dry.values(bandNames));
@@ -434,7 +480,7 @@ var centered_Dry = L5_bands_Dry.subtract(means_Dry);
 var getNewBandNames_Dry = function(prefix) {
   var seq_Dry = ee.List.sequence(1, bandNames.length());
   return seq_Dry.map(function(b) {
-    return ee.String(prefix).cat(ee.Number(b).int());
+    return ee.String(prefix).cat(ee.Number(b).format('%d'));
   });
 };
 
@@ -449,7 +495,9 @@ var getPrincipalComponents_Dry = function(centered_Dry, scale, geometry) {
   var covar_Dry = arrays_Dry.reduceRegion({
     reducer: ee.Reducer.centeredCovariance(),
     geometry: geometry,
+    crs: pcaProjection,
     scale: scale,
+    tileScale: 4,
     maxPixels: 1e9
   });
 
